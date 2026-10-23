@@ -1,10 +1,35 @@
 import { Router } from "express";
 import { z } from "zod";
 import { HttpError } from "../errors/http-error.js";
+import { requireRole } from "../middleware/authentication.js";
 import {
+  createVehicle,
+  deleteVehicle,
   listVehicles,
   type VehicleSearchFilters,
+  updateVehicle,
 } from "../services/vehicle-query.service.js";
+
+const priceSchema = z
+  .number()
+  .finite()
+  .min(0)
+  .max(9_999_999_999.99)
+  .refine((price) => Math.round(price * 100) === price * 100);
+
+const createVehicleSchema = z.object({
+  make: z.string().trim().min(1).max(200),
+  model: z.string().trim().min(1).max(200),
+  category: z.string().trim().min(1).max(100),
+  price: priceSchema,
+  quantity: z.number().int().nonnegative(),
+});
+
+const updateVehicleSchema = createVehicleSchema
+  .omit({ quantity: true })
+  .strip();
+
+const vehicleIdSchema = z.string().uuid();
 
 const priceQuerySchema = z
   .string()
@@ -54,6 +79,55 @@ router.get("/search", async (request, response) => {
 router.get("/", async (_request, response) => {
   const vehicles = await listVehicles();
   response.status(200).json({ vehicles });
+});
+
+router.post("/", requireRole("ADMIN"), async (request, response) => {
+  const parsed = createVehicleSchema.safeParse(request.body);
+  if (!parsed.success) {
+    throw new HttpError(
+      400,
+      "VALIDATION_ERROR",
+      "Vehicle make, model, category, nonnegative price, and nonnegative integer quantity are required.",
+    );
+  }
+
+  const vehicle = await createVehicle(parsed.data);
+  response.status(201).json({ vehicle });
+});
+
+router.put("/:id", requireRole("ADMIN"), async (request, response) => {
+  const parsedId = vehicleIdSchema.safeParse(request.params.id);
+  if (!parsedId.success) {
+    throw new HttpError(400, "VALIDATION_ERROR", "Vehicle ID must be a UUID.");
+  }
+
+  const parsedVehicle = updateVehicleSchema.safeParse(request.body);
+  if (!parsedVehicle.success) {
+    throw new HttpError(
+      400,
+      "VALIDATION_ERROR",
+      "Vehicle make, model, category, and nonnegative price are required.",
+    );
+  }
+
+  const vehicle = await updateVehicle(parsedId.data, parsedVehicle.data);
+  if (!vehicle) {
+    throw new HttpError(404, "NOT_FOUND", "Vehicle was not found.");
+  }
+  response.status(200).json({ vehicle });
+});
+
+router.delete("/:id", requireRole("ADMIN"), async (request, response) => {
+  const parsedId = vehicleIdSchema.safeParse(request.params.id);
+  if (!parsedId.success) {
+    throw new HttpError(400, "VALIDATION_ERROR", "Vehicle ID must be a UUID.");
+  }
+
+  const deleted = await deleteVehicle(parsedId.data);
+  if (!deleted) {
+    throw new HttpError(404, "NOT_FOUND", "Vehicle was not found.");
+  }
+  response.status(200).json({ message: "Vehicle deleted successfully." });
 });
 
 export default router;

@@ -98,5 +98,31 @@ Commands run from `backend/`:
 
 Authentication tests cover registration, login, role assignment, validation,
 password-hash omission from responses, and rejection of missing, invalid, or
-expired tokens. Vehicle API and purchase behavior remain unimplemented and
-untested.
+expired tokens. Vehicle list/search and admin-management APIs are documented
+in the sections below. Purchase behavior remains unimplemented and untested.
+
+## Admin vehicle management — RED-GREEN
+
+Before implementation, the new admin-management integration tests were run
+against the test database. They failed on missing routes and behavior; the
+existing token rejection checks passed. The actual RED result was 1 test file,
+19 failed and 4 passed (23 total).
+
+After implementing create, update, and delete, the focused management suite
+passed: 1 test file, 22 tests. An initial full-suite run reported 51 passed
+and 2 failed because the concurrent vehicle-list/search and management test
+files used the same test database fixtures. Both vehicle integration suites
+now serialize fixture access using a PostgreSQL advisory lock.
+
+Final commands run from `backend/`:
+
+| Command | Result |
+| --- | --- |
+| `npm.cmd test -- src/vehicle-management.integration.test.ts` | Passed: 1 test file, 22 tests. |
+| `npm.cmd test` | Passed: 7 test files, 53 tests, duration 1.70 seconds. |
+| `npm.cmd run typecheck` | Passed. |
+| Test database fixture check | Passed: no `vehicle-admin-it-` or `vehicle-it-` fixture rows remained. |
+
+Creation, update, and delete require ADMIN. Updates accept make, model,
+category, and price; quantity is not updated by this endpoint. Purchase and
+restock behavior remain unimplemented and untested.

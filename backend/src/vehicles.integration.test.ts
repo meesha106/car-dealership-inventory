@@ -2,10 +2,12 @@ import { randomUUID } from "node:crypto";
 import { sign } from "jsonwebtoken";
 import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import type { PoolClient } from "pg";
 import { app } from "./app.js";
 import { createDatabasePool } from "./db/pool.js";
 
 const database = createDatabasePool("test");
+let fixtureLockClient: PoolClient | undefined;
 const createdVehicleIds = new Set<string>();
 const fixturePrefix = `vehicle-it-${randomUUID()}`;
 
@@ -65,6 +67,8 @@ async function getVehicles(path: string) {
 
 describe("vehicle listing and search HTTP integration", () => {
   beforeAll(async () => {
+    fixtureLockClient = await database.connect();
+    await fixtureLockClient.query("SELECT pg_advisory_lock(531995, 2)");
     await database.query("SELECT id FROM vehicles LIMIT 0");
     if (!process.env.JWT_SECRET) {
       throw new Error("JWT_SECRET must be configured for vehicle tests");
@@ -93,8 +97,18 @@ describe("vehicle listing and search HTTP integration", () => {
   });
 
   afterAll(async () => {
-    await database.query("DELETE FROM vehicles WHERE make LIKE 'vehicle-it-%'");
-    await database.end();
+    try {
+      await database.query("DELETE FROM vehicles WHERE make LIKE 'vehicle-it-%'");
+    } finally {
+      if (fixtureLockClient) {
+        try {
+          await fixtureLockClient.query("SELECT pg_advisory_unlock(531995, 2)");
+        } finally {
+          fixtureLockClient.release();
+        }
+      }
+      await database.end();
+    }
   });
 
   it("requires a valid token to list vehicles", async () => {

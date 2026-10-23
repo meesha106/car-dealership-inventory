@@ -76,6 +76,13 @@ PostgreSQL advisory lock.
   make/model and category indexes support case-insensitive filtering; purchase
   indexes support customer and vehicle history ordered by purchase time.
 
+## Vehicle management authorization
+
+The assignment labels vehicle add/update as "protected" and explicitly labels
+delete/restock as "Admin only." This implementation restricts add, update, and
+delete to ADMIN accounts as a documented product decision; inventory changes
+remain unavailable to USER accounts.
+
 ## API
 
 _API documentation will be added as endpoints are implemented._
