@@ -1,24 +1,28 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { AuthProvider } from "./auth/AuthProvider";
+import { useAuth } from "./auth/auth-context";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import { DashboardPage } from "./pages/DashboardPage";
+import { LoginPage } from "./pages/LoginPage";
+import { RegisterPage } from "./pages/RegisterPage";
 
-function StatusPage() {
-  return (
-    <main className="grid min-h-screen place-items-center bg-slate-100 p-6 text-center text-slate-900">
-      <div>
-        <h1 className="text-3xl font-bold">Car Dealership Inventory System</h1>
-        <p className="mt-3 text-lg">The app is running.</p>
-      </div>
-    </main>
-  );
+function HomeRedirect() {
+  const { isAuthenticated } = useAuth();
+  return <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />;
 }
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<StatusPage />} />
-      <Route path="/login" element={<StatusPage />} />
-      <Route path="/register" element={<StatusPage />} />
-      <Route path="/dashboard" element={<StatusPage />} />
-      <Route path="*" element={<StatusPage />} />
-    </Routes>
+    <AuthProvider>
+      <Routes>
+        <Route element={<HomeRedirect />} path="/" />
+        <Route element={<LoginPage />} path="/login" />
+        <Route element={<RegisterPage />} path="/register" />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<DashboardPage />} path="/dashboard" />
+        </Route>
+        <Route element={<HomeRedirect />} path="*" />
+      </Routes>
+    </AuthProvider>
   );
 }

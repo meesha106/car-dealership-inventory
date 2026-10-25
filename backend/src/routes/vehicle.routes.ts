@@ -6,6 +6,8 @@ import {
   createVehicle,
   deleteVehicle,
   listVehicles,
+  purchaseVehicle,
+  restockVehicle,
   type VehicleSearchFilters,
   updateVehicle,
 } from "../services/vehicle-query.service.js";
@@ -30,6 +32,9 @@ const updateVehicleSchema = createVehicleSchema
   .strip();
 
 const vehicleIdSchema = z.string().uuid();
+const restockSchema = z.object({
+  quantity: z.number().int().positive().max(2_147_483_647),
+});
 
 const priceQuerySchema = z
   .string()
@@ -79,6 +84,41 @@ router.get("/search", async (request, response) => {
 router.get("/", async (_request, response) => {
   const vehicles = await listVehicles();
   response.status(200).json({ vehicles });
+});
+
+router.post("/:id/purchase", async (request, response) => {
+  const parsedId = vehicleIdSchema.safeParse(request.params.id);
+  if (!parsedId.success) {
+    throw new HttpError(400, "VALIDATION_ERROR", "Vehicle ID must be a UUID.");
+  }
+  const userId = request.auth?.id;
+  if (!userId) {
+    throw new HttpError(401, "UNAUTHORIZED", "A valid bearer token is required.");
+  }
+
+  const result = await purchaseVehicle(parsedId.data, userId);
+  response.status(201).json(result);
+});
+
+router.post("/:id/restock", requireRole("ADMIN"), async (request, response) => {
+  const parsedId = vehicleIdSchema.safeParse(request.params.id);
+  if (!parsedId.success) {
+    throw new HttpError(400, "VALIDATION_ERROR", "Vehicle ID must be a UUID.");
+  }
+  const parsedBody = restockSchema.safeParse(request.body);
+  if (!parsedBody.success) {
+    throw new HttpError(
+      400,
+      "VALIDATION_ERROR",
+      "quantity must be a positive integer.",
+    );
+  }
+
+  const vehicle = await restockVehicle(parsedId.data, parsedBody.data.quantity);
+  if (!vehicle) {
+    throw new HttpError(404, "NOT_FOUND", "Vehicle was not found.");
+  }
+  response.status(200).json({ vehicle });
 });
 
 router.post("/", requireRole("ADMIN"), async (request, response) => {
